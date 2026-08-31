@@ -1,0 +1,1249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MF - EXIF Stripper</title>
+<style>
+:root{
+  /* palette sampled from the Midnight Fox mark: navy field, white linework */
+  --ink:#020e26;
+  --panel:#06162f;
+  --panel-2:#0d1f3f;
+  --line:#18294a;
+  --line-bright:#2a3f68;
+  --fog:#7e91b8;
+  --chalk:#dce5f7;
+  --frost:#ffffff;
+  --frost-dim:#3b4f80;
+  --verdigris:#4fc2ad;
+  --alarm:#ec7280;
+  --warn:#e9a13b;
+  --mono: ui-monospace,"JetBrains Mono","SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--ink);color:var(--chalk);font-family:var(--sans);
+  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh}
+a{color:var(--frost);text-decoration:underline;text-underline-offset:3px;
+  text-decoration-color:var(--frost-dim)}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 22px 40px}
+
+.masthead{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+  flex-wrap:wrap;padding-bottom:18px;margin-bottom:26px;border-bottom:1px solid var(--line)}
+.wordmark{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.02em;margin:0}
+.wordmark .dot{color:var(--frost)}
+.tagline{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--fog);margin:0}
+.tagline b{color:var(--verdigris);font-weight:500}
+
+.bench{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start}
+@media (max-width:1040px){.bench{grid-template-columns:minmax(0,1fr)}}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:3px}
+.panel + .panel{margin-top:22px}
+.panel-hd{display:flex;align-items:center;gap:10px;padding:11px 16px;
+  border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11px;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--fog)}
+.panel-hd .rule{flex:1;height:1px;background:var(--line)}
+.panel-bd{padding:16px}
+.panel-bd.flush{padding:0}
+
+.status{font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--fog);white-space:nowrap}
+.status.ok{color:var(--verdigris)}
+.status.err{color:var(--alarm)}
+.status.run{color:var(--warn)}
+
+label.fl{display:block;font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--fog);margin-bottom:6px}
+input[type=text],input[type=number],select,textarea{width:100%;padding:8px 10px;
+  background:var(--ink);color:var(--chalk);border:1px solid var(--line-bright);
+  border-radius:2px;font-family:var(--mono);font-size:12.5px;line-height:1.5}
+input:focus,select:focus,textarea:focus{border-color:var(--frost);outline:none}
+:focus-visible{outline:2px solid var(--frost);outline-offset:2px}
+
+button{font-family:var(--mono);cursor:pointer}
+.btn{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;padding:8px 14px;
+  border-radius:2px;border:1px solid var(--line-bright);background:var(--panel-2);
+  color:var(--chalk);transition:border-color .15s,color .15s,background .15s}
+.btn:hover:not(:disabled){border-color:var(--frost);color:var(--frost)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.primary{background:var(--frost);border-color:var(--frost);color:#02102a;font-weight:600}
+.btn.primary:hover:not(:disabled){background:#d9e4fb;border-color:#d9e4fb}
+.btn.block{width:100%;padding:13px;font-size:12.5px}
+
+.issue{border-left:2px solid var(--line-bright);padding:9px 12px;margin-bottom:8px;
+  background:var(--panel-2)}
+.issue .ttl{font-size:13px;line-height:1.4;color:var(--chalk)}
+.issue .sub{font-family:var(--mono);font-size:10.5px;color:var(--fog);
+  line-height:1.6;margin-top:3px;word-break:break-word}
+.issue.pass{border-color:var(--verdigris);background:rgba(79,194,173,.07)}
+.issue.pass .ttl{color:var(--verdigris)}
+.issue.warn{border-color:var(--warn);background:rgba(233,161,59,.07)}
+.issue.warn .ttl{color:var(--warn)}
+.issue.fail{border-color:var(--alarm);background:rgba(236,114,128,.07)}
+.issue.fail .ttl{color:var(--alarm)}
+.issue.info{border-color:var(--frost-dim);background:rgba(255,255,255,.04)}
+.issue.info .ttl{color:var(--frost)}
+
+.note{margin:0 0 12px;font-size:13px;color:var(--fog);line-height:1.6}
+.note:last-child{margin-bottom:0}
+.note b{color:var(--chalk);font-weight:600}
+.note code{font-family:var(--mono);font-size:11.5px;color:var(--chalk)}
+
+.out{font-family:var(--mono);font-size:11.5px;line-height:1.7;background:var(--ink);
+  border:1px solid var(--line);border-radius:2px;padding:11px 12px;
+  overflow:auto;white-space:pre;color:var(--chalk)}
+
+.foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--fog)}
+.foot b{color:var(--chalk);font-weight:600}
+
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
+
+/* ---- extensions ---- */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+.drop{display:block;width:100%;border:1px dashed var(--line-bright);border-radius:3px;
+  background:transparent;color:var(--chalk);padding:24px 16px;text-align:center;
+  transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--frost);background:rgba(255,255,255,.045)}
+.drop.over{background:rgba(255,255,255,.08)}
+.drop .glyph{display:block;font-family:var(--mono);font-size:20px;color:var(--frost);line-height:1}
+.drop .cap{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--fog);margin-top:9px}
+.drop .sub{display:block;font-family:var(--mono);font-size:10.5px;color:var(--line-bright);
+  letter-spacing:.06em;margin-top:5px;text-transform:none}
+
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.row.tight{margin-top:10px}
+
+.opt{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
+.opt:first-child{padding-top:0;border-top:0}
+.opt:last-child{padding-bottom:0}
+.opt input[type=checkbox]{width:auto;margin:3px 0 0;accent-color:var(--frost);flex:none}
+.opt .t{font-size:13px;color:var(--chalk);cursor:pointer}
+.opt .h{font-family:var(--mono);font-size:10.5px;color:var(--fog);line-height:1.6;margin-top:3px}
+
+table.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--fog);text-align:left;font-weight:400;padding:9px 12px;border-bottom:1px solid var(--line)}
+.tbl td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl tbody tr:last-child td{border-bottom:0}
+.tbl tbody tr:hover{background:var(--panel-2)}
+.tbl tbody tr.sel{background:var(--panel-2)}
+.tbl tbody tr.sel td:first-child{box-shadow:inset 2px 0 0 var(--frost)}
+.tbl td.num,.tbl th.num{text-align:right;font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+.tbl td.act{text-align:right;white-space:nowrap}
+
+.lnk{background:none;border:0;padding:0;color:var(--chalk);font-family:var(--sans);
+  font-size:12.5px;text-align:left;line-height:1.4;word-break:break-all}
+.lnk:hover{color:var(--frost)}
+.btn.sm{padding:5px 9px;font-size:10px;letter-spacing:.08em}
+
+.mono{font-family:var(--mono);font-size:11.5px}
+.dim{color:var(--fog)}
+.ok{color:var(--verdigris)}
+.bad{color:var(--alarm)}
+.wn{color:var(--warn)}
+.fr{color:var(--frost)}
+
+.empty{font-family:var(--mono);font-size:11.5px;color:var(--line-bright);
+  letter-spacing:.06em;text-align:center;padding:26px 14px}
+
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--line);padding:0 8px;flex-wrap:wrap}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:9px 10px;
+  font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--fog);
+  transition:color .15s,border-color .15s}
+.tab:hover{color:var(--chalk)}
+.tab[aria-selected=true]{color:var(--frost);border-bottom-color:var(--frost)}
+.pane{padding:16px}
+.pane.nopad{padding:0}
+.pane[hidden]{display:none}
+
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 14px;
+  font-family:var(--mono);font-size:11.5px;margin:0}
+.kv dt{color:var(--fog);white-space:nowrap}
+.kv dd{margin:0;color:var(--chalk);word-break:break-word}
+
+.seg-keep{color:var(--verdigris)}
+.seg-drop{color:var(--alarm)}
+
+@media (max-width:900px){.wrap{padding:24px 18px 34px}}
+@media (max-width:640px){
+  .wordmark{font-size:22px}
+  .tbl th,.tbl td{padding:8px 9px}
+  .tbl th.hide-s,.tbl td.hide-s{display:none}
+}
+@media (max-width:560px){
+  .foot{flex-direction:column;gap:6px}
+  .drop{padding:20px 12px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <h1 class="wordmark">M<span class="dot">F</span> - EXIF Stripper</h1>
+    <p class="tagline">lossless jpeg &amp; png metadata removal &middot; <b>runs entirely in this tab</b></p>
+  </header>
+
+  <main class="bench">
+
+    <div class="col">
+
+      <section class="panel">
+        <div class="panel-hd"><span>Input</span><span class="rule"></span><span class="status" id="inStatus">idle</span></div>
+        <div class="panel-bd">
+          <button type="button" class="drop" id="drop" aria-describedby="dropHelp">
+            <span class="glyph" aria-hidden="true">&#8615;</span>
+            <span class="cap">Drop images or click to browse</span>
+            <span class="sub" id="dropHelp">.jpg &middot; .jpeg &middot; .png &mdash; multiple files, nothing is uploaded</span>
+          </button>
+          <input type="file" id="file" class="sr-only" multiple accept="image/jpeg,image/png,.jpg,.jpeg,.png" aria-label="Choose JPEG or PNG files">
+          <div class="row">
+            <button type="button" class="btn sm" id="sampleJpg">Load JPEG sample</button>
+            <button type="button" class="btn sm" id="samplePng">Load PNG sample</button>
+            <button type="button" class="btn sm" id="clearAll">Clear queue</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-hd"><span>Retention rules</span><span class="rule"></span></div>
+        <div class="panel-bd">
+          <div class="opt">
+            <input type="checkbox" id="optIcc" checked>
+            <div><label class="t" for="optIcc">Keep ICC colour profile</label>
+              <div class="h">APP2 ICC_PROFILE / iCCP. Dropping it makes wide-gamut and CMYK files render wrong in colour-managed viewers. It carries no personal data.</div></div>
+          </div>
+          <div class="opt">
+            <input type="checkbox" id="optOrient" checked>
+            <div><label class="t" for="optOrient">Preserve orientation flag</label>
+              <div class="h">Rewrites a 26-byte TIFF block holding only tag 0x0112. Without it, phone photos shot in portrait display sideways after stripping.</div></div>
+          </div>
+          <div class="opt">
+            <input type="checkbox" id="optDensity" checked>
+            <div><label class="t" for="optDensity">Keep density / DPI</label>
+              <div class="h">JFIF APP0 and PNG pHYs, oFFs, sCAL. Needed for correct print sizing in InDesign, Word and Acrobat placement.</div></div>
+          </div>
+          <div class="opt">
+            <input type="checkbox" id="optUnknown" checked>
+            <div><label class="t" for="optUnknown">Drop unknown / vendor blocks</label>
+              <div class="h">Undocumented APPn segments and private PNG chunks &mdash; Samsung, Apple, Fireworks, C2PA provenance. Off = keep anything not positively identified as metadata.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-hd"><span>Queue</span><span class="rule"></span><span class="status" id="qStatus">0 files</span></div>
+        <div class="panel-bd flush">
+          <div id="queueWrap">
+            <div class="empty" id="queueEmpty">no files loaded</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-hd"><span>Artefacts</span><span class="rule"></span></div>
+        <div class="panel-bd">
+          <button type="button" class="btn primary block" id="dlAll" disabled>Download all cleaned (.zip)</button>
+          <div class="row">
+            <button type="button" class="btn sm" id="dlOne" disabled>Download selected</button>
+            <button type="button" class="btn sm" id="dlAudit" disabled>Download audit JSON</button>
+          </div>
+          <p class="note" style="margin-top:14px">The zip is written with <b>stored</b> entries, not deflate &mdash; JPEG and PNG payloads are already compressed, and store keeps the cleaned bytes recoverable byte-for-byte.</p>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="col">
+
+      <section class="panel">
+        <div class="panel-hd"><span>Report</span><span class="rule"></span><span class="status" id="rStatus">no selection</span></div>
+        <div class="tabs" role="tablist" aria-label="Report views">
+          <button type="button" class="tab" role="tab" id="tab-find" aria-controls="pane-find" aria-selected="true">Findings</button>
+          <button type="button" class="tab" role="tab" id="tab-meta" aria-controls="pane-meta" aria-selected="false" tabindex="-1">Metadata read</button>
+          <button type="button" class="tab" role="tab" id="tab-struct" aria-controls="pane-struct" aria-selected="false" tabindex="-1">Structure</button>
+          <button type="button" class="tab" role="tab" id="tab-audit" aria-controls="pane-audit" aria-selected="false" tabindex="-1">Audit JSON</button>
+        </div>
+        <div class="pane" id="pane-find" role="tabpanel" aria-labelledby="tab-find" tabindex="0">
+          <div class="empty">select a file in the queue</div>
+        </div>
+        <div class="pane" id="pane-meta" role="tabpanel" aria-labelledby="tab-meta" tabindex="0" hidden>
+          <div class="empty">select a file in the queue</div>
+        </div>
+        <div class="pane" id="pane-struct" role="tabpanel" aria-labelledby="tab-struct" tabindex="0" hidden>
+          <div class="empty">select a file in the queue</div>
+        </div>
+        <div class="pane" id="pane-audit" role="tabpanel" aria-labelledby="tab-audit" tabindex="0" hidden>
+          <div class="empty">select a file in the queue</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-hd"><span>Method</span><span class="rule"></span></div>
+        <div class="panel-bd">
+          <p class="note">This is a <b>container rewrite</b>, not a re-encode. The JPEG entropy-coded scan and the PNG <code>IDAT</code> stream are copied across untouched, so the output decodes to pixels identical to the input. Canvas-based strippers &mdash; the usual browser approach &mdash; decode and re-compress, which loses quality on every pass, drops alpha on JPEG conversion and silently changes the file size.</p>
+          <p class="note"><b>APP14 Adobe</b> is always retained. It declares the YCCK/CMYK colour transform, and tools that blanket-delete every APPn segment turn Adobe-authored CMYK JPEGs inverted. <b>acTL/fcTL/fdAT</b> are likewise retained, or an APNG collapses to a still frame.</p>
+          <p class="note">Nothing here touches the network. There is no fetch, no XHR, no external stylesheet or script, and no storage API &mdash; state lives in the tab and dies with it.</p>
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <footer class="foot">
+    <span><b>Midnight Fox</b> &middot; mf-exif-stripper</span>
+    <span>no server &middot; no upload &middot; no network call</span>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ============================ byte helpers ============================ */
+function cat(parts){
+  var n=0,i;for(i=0;i<parts.length;i++)n+=parts[i].length;
+  var o=new Uint8Array(n),p=0;
+  for(i=0;i<parts.length;i++){o.set(parts[i],p);p+=parts[i].length;}
+  return o;
+}
+function ascii(s,nul){
+  var n=s.length+(nul===false?0:1),u=new Uint8Array(n),i;
+  for(i=0;i<s.length;i++)u[i]=s.charCodeAt(i)&255;
+  return u;
+}
+function readAscii(b,off,max){
+  var s='',i;
+  for(i=0;i<max;i++){var c=b[off+i];if(c===undefined||c===0)break;s+=String.fromCharCode(c);}
+  return s;
+}
+function be16(b,o){return (b[o]<<8)|b[o+1];}
+function be32(b,o){return ((b[o]<<24)|(b[o+1]<<16)|(b[o+2]<<8)|b[o+3])>>>0;}
+function fmtBytes(n){
+  if(n===0)return '0 B';
+  if(n<1024)return n+' B';
+  if(n<1048576)return (n/1024).toFixed(1)+' KiB';
+  return (n/1048576).toFixed(2)+' MiB';
+}
+function b64ToBytes(s){
+  var bin=atob(s),u=new Uint8Array(bin.length),i;
+  for(i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+  return u;
+}
+
+/* ============================ crc32 + store-only zip ============================ */
+var CRC_T=(function(){
+  var t=new Uint32Array(256),c,n,k;
+  for(n=0;n<256;n++){c=n;for(k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}
+  return t;
+})();
+function crc32(u8){
+  var c=0xFFFFFFFF,i;
+  for(i=0;i<u8.length;i++)c=CRC_T[(c^u8[i])&255]^(c>>>8);
+  return (c^0xFFFFFFFF)>>>0;
+}
+function dosTime(d){
+  return ((d.getHours()<<11)|(d.getMinutes()<<5)|(Math.floor(d.getSeconds()/2)))&0xFFFF;
+}
+function dosDate(d){
+  return (((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate())&0xFFFF;
+}
+function utf8(s){
+  var out=[],i,c;
+  for(i=0;i<s.length;i++){
+    c=s.charCodeAt(i);
+    if(c<0x80)out.push(c);
+    else if(c<0x800){out.push(0xC0|(c>>6),0x80|(c&63));}
+    else{out.push(0xE0|(c>>12),0x80|((c>>6)&63),0x80|(c&63));}
+  }
+  return new Uint8Array(out);
+}
+function zipStore(entries){
+  var now=new Date(),t=dosTime(now),d=dosDate(now);
+  var locals=[],central=[],offset=0,i;
+  for(i=0;i<entries.length;i++){
+    var name=utf8(entries[i].name),data=entries[i].data,crc=crc32(data);
+    var lh=new Uint8Array(30+name.length),lv=new DataView(lh.buffer);
+    lv.setUint32(0,0x04034b50,true);lv.setUint16(4,20,true);lv.setUint16(6,0x0800,true);
+    lv.setUint16(8,0,true);lv.setUint16(10,t,true);lv.setUint16(12,d,true);
+    lv.setUint32(14,crc,true);lv.setUint32(18,data.length,true);lv.setUint32(22,data.length,true);
+    lv.setUint16(26,name.length,true);lv.setUint16(28,0,true);
+    lh.set(name,30);
+    locals.push(lh,data);
+    var ch=new Uint8Array(46+name.length),cv=new DataView(ch.buffer);
+    cv.setUint32(0,0x02014b50,true);cv.setUint16(4,20,true);cv.setUint16(6,20,true);
+    cv.setUint16(8,0x0800,true);cv.setUint16(10,0,true);cv.setUint16(12,t,true);cv.setUint16(14,d,true);
+    cv.setUint32(16,crc,true);cv.setUint32(20,data.length,true);cv.setUint32(24,data.length,true);
+    cv.setUint16(28,name.length,true);cv.setUint16(30,0,true);cv.setUint16(32,0,true);
+    cv.setUint16(34,0,true);cv.setUint16(36,0,true);cv.setUint32(38,0,true);
+    cv.setUint32(42,offset,true);
+    ch.set(name,46);
+    central.push(ch);
+    offset+=lh.length+data.length;
+  }
+  var cd=cat(central);
+  var eocd=new Uint8Array(22),ev=new DataView(eocd.buffer);
+  ev.setUint32(0,0x06054b50,true);ev.setUint16(8,entries.length,true);
+  ev.setUint16(10,entries.length,true);ev.setUint32(12,cd.length,true);ev.setUint32(16,offset,true);
+  return cat([cat(locals),cd,eocd]);
+}
+
+/* ============================ TIFF / EXIF reader ============================ */
+var TSZ=[0,1,1,2,4,8,1,1,2,4,8,4,8];
+var N0={0x010E:'ImageDescription',0x010F:'Make',0x0110:'Model',0x0112:'Orientation',
+  0x011A:'XResolution',0x011B:'YResolution',0x0131:'Software',0x0132:'DateTime',
+  0x013B:'Artist',0x8298:'Copyright',0x9C9B:'XPTitle',0x9C9C:'XPComment',
+  0x9C9D:'XPAuthor',0x9C9E:'XPKeywords',0x9C9F:'XPSubject'};
+var NE={0x829A:'ExposureTime',0x829D:'FNumber',0x8827:'ISO',0x9003:'DateTimeOriginal',
+  0x9004:'DateTimeDigitized',0x9286:'UserComment',0x920A:'FocalLength',
+  0xA420:'ImageUniqueID',0xA430:'CameraOwnerName',0xA431:'BodySerialNumber',
+  0xA433:'LensMake',0xA434:'LensModel',0xA435:'LensSerialNumber'};
+var NG={0:'GPSVersionID',1:'GPSLatitudeRef',2:'GPSLatitude',3:'GPSLongitudeRef',
+  4:'GPSLongitude',5:'GPSAltitudeRef',6:'GPSAltitude',7:'GPSTimeStamp',
+  27:'GPSProcessingMethod',29:'GPSDateStamp'};
+
+function parseTiff(b,base,len){
+  var end=base+len;
+  if(len<8)throw new Error('TIFF block too short');
+  var b0=b[base];
+  if(!((b0===0x49&&b[base+1]===0x49)||(b0===0x4D&&b[base+1]===0x4D)))throw new Error('bad byte order mark');
+  var le=b0===0x49;
+  function u16(p){return le?(b[p]|(b[p+1]<<8)):((b[p]<<8)|b[p+1]);}
+  function u32(p){return (le?(b[p]|(b[p+1]<<8)|(b[p+2]<<16)|(b[p+3]<<24)):((b[p]<<24)|(b[p+1]<<16)|(b[p+2]<<8)|b[p+3]))>>>0;}
+  if(u16(base+2)!==42)throw new Error('bad TIFF magic');
+
+  var res={tags:{},gps:{},tagCount:0,ifds:0,thumbBytes:0,orientation:1,
+           endian:le?'little (II)':'big (MM)',hasGps:false,hasThumb:false};
+  var seen={};
+
+  function val(type,cnt,vo){
+    var i,a;
+    if(type===2){var s='';for(i=0;i<cnt;i++){var c=b[vo+i];if(c===0||c===undefined)break;s+=String.fromCharCode(c);}return s.replace(/\s+$/,'');}
+    if(type===1||type===7){a=[];for(i=0;i<Math.min(cnt,200);i++)a.push(b[vo+i]);return a;}
+    if(type===3){if(cnt===1)return u16(vo);a=[];for(i=0;i<Math.min(cnt,16);i++)a.push(u16(vo+i*2));return a;}
+    if(type===4||type===9){if(cnt===1)return u32(vo);a=[];for(i=0;i<Math.min(cnt,16);i++)a.push(u32(vo+i*4));return a;}
+    if(type===5||type===10){a=[];for(i=0;i<Math.min(cnt,16);i++)a.push([u32(vo+i*8),u32(vo+i*8+4)]);return cnt===1?a[0]:a;}
+    return null;
+  }
+  function utf16le(arr){
+    var s='',i;
+    for(i=0;i+1<arr.length;i+=2){var c=arr[i]|(arr[i+1]<<8);if(!c)break;s+=String.fromCharCode(c);}
+    return s;
+  }
+  function decodeUserComment(arr){
+    if(!arr||arr.length<9)return null;
+    var head=String.fromCharCode(arr[0],arr[1],arr[2],arr[3],arr[4]);
+    var body=arr.slice(8),s='',i;
+    if(head==='UNICO')return utf16le(body);
+    for(i=0;i<body.length;i++){if(!body[i])break;s+=String.fromCharCode(body[i]);}
+    return s;
+  }
+
+  function readIfd(off,which,sink){
+    if(off<8||seen[which+':'+off])return 0;
+    seen[which+':'+off]=1;
+    var a=base+off;
+    if(a+2>end)return 0;
+    var n=u16(a);
+    if(n<0||n>512||a+2+n*12+4>end)return 0;
+    res.ifds++;
+    for(var i=0;i<n;i++){
+      var o=a+2+i*12;
+      var tag=u16(o),type=u16(o+2),cnt=u32(o+4);
+      var ts=TSZ[type]||0;if(!ts)continue;
+      var total=ts*cnt;
+      var vo=o+8;
+      if(total>4){vo=base+u32(o+8);if(vo<base||vo+total>end)continue;}
+      res.tagCount++;
+      if(which==='ifd0'&&tag===0x8769){readIfd(u32(o+8),'exif',res.tags);continue;}
+      if(which==='ifd0'&&tag===0x8825){res.hasGps=true;readIfd(u32(o+8),'gps',res.gps);continue;}
+      if(which==='exif'&&tag===0xA005){readIfd(u32(o+8),'iop',{});continue;}
+      var v=val(type,cnt,vo);
+      if(which==='ifd0'&&tag===0x0112&&typeof v==='number')res.orientation=v;
+      if(which==='ifd1'&&tag===0x0202){res.thumbBytes=typeof v==='number'?v:0;res.hasThumb=true;continue;}
+      var nm=which==='gps'?NG[tag]:(which==='exif'?NE[tag]:N0[tag]);
+      if(!nm)continue;
+      if(nm.indexOf('XP')===0&&v&&v.length)v=utf16le(v);
+      if(nm==='UserComment')v=decodeUserComment(v);
+      if(v===''||v===null||v===undefined)continue;
+      sink[nm]=v;
+    }
+    return u32(a+2+n*12);
+  }
+
+  var next=readIfd(u32(base+4),'ifd0',res.tags);
+  if(next)readIfd(next,'ifd1',{});
+
+  function dms(a,ref){
+    if(!a||a.length<3)return null;
+    function f(p){return p&&p[1]?p[0]/p[1]:0;}
+    var v=f(a[0])+f(a[1])/60+f(a[2])/3600;
+    if(ref==='S'||ref==='W')v=-v;
+    return v;
+  }
+  var lat=dms(res.gps.GPSLatitude,res.gps.GPSLatitudeRef);
+  var lon=dms(res.gps.GPSLongitude,res.gps.GPSLongitudeRef);
+  if(lat!==null&&lon!==null&&isFinite(lat)&&isFinite(lon)){
+    res.coords={lat:lat,lon:lon};
+    var alt=res.gps.GPSAltitude;
+    if(alt&&alt[1])res.coords.alt=(res.gps.GPSAltitudeRef===1?-1:1)*(alt[0]/alt[1]);
+  }
+  return res;
+}
+
+/* minimal 26-byte TIFF block carrying only tag 0x0112 */
+function orientationTiff(orient){
+  var b=new Uint8Array(26),dv=new DataView(b.buffer);
+  b[0]=0x49;b[1]=0x49;
+  dv.setUint16(2,42,true);dv.setUint32(4,8,true);
+  dv.setUint16(8,1,true);
+  dv.setUint16(10,0x0112,true);dv.setUint16(12,3,true);dv.setUint32(14,1,true);
+  dv.setUint16(18,orient,true);dv.setUint16(20,0,true);
+  dv.setUint32(22,0,true);
+  return b;
+}
+
+/* ============================ JPEG ============================ */
+var SOF=[0xC0,0xC1,0xC2,0xC3,0xC5,0xC6,0xC7,0xC9,0xCA,0xCB,0xCD,0xCE,0xCF];
+function markerName(m){
+  if(m===0xDB)return 'DQT quantisation table';
+  if(m===0xC4)return 'DHT huffman table';
+  if(m===0xDD)return 'DRI restart interval';
+  if(m===0xDA)return 'SOS start of scan';
+  if(m===0xD9)return 'EOI end of image';
+  if(m===0xCC)return 'DAC arithmetic table';
+  if(SOF.indexOf(m)>=0)return 'SOF'+(m-0xC0)+' frame header';
+  return 'marker FF'+m.toString(16).toUpperCase();
+}
+function scanJpeg(b){
+  if(b.length<4||b[0]!==0xFF||b[1]!==0xD8)throw new Error('not a JPEG: missing SOI');
+  var segs=[],i=2;
+  while(i<b.length){
+    if(b[i]!==0xFF)throw new Error('corrupt JPEG: expected a marker at byte '+i);
+    var j=i;
+    while(j<b.length&&b[j]===0xFF)j++;
+    if(j>=b.length)throw new Error('truncated JPEG: marker without identifier');
+    var m=b[j];
+    if(m===0x00)throw new Error('corrupt JPEG: stuffed byte outside scan at '+j);
+    if(m===0xD9){segs.push({marker:m,start:i,end:j+1,standalone:true});i=j+1;break;}
+    if(m===0x01||(m>=0xD0&&m<=0xD7)){segs.push({marker:m,start:i,end:j+1,standalone:true});i=j+1;continue;}
+    if(j+2>=b.length)throw new Error('truncated JPEG segment header');
+    var len=be16(b,j+1);
+    if(len<2)throw new Error('bad JPEG segment length at '+j);
+    var ps=j+3,pe=j+1+len;
+    if(pe>b.length)throw new Error('truncated JPEG segment payload');
+    var seg={marker:m,start:i,end:pe,payloadStart:ps,payloadEnd:pe,len:len};
+    segs.push(seg);
+    if(m===0xDA){seg.sos=true;break;}
+    i=pe;
+  }
+  return segs;
+}
+function classifyJpeg(b,s,opt){
+  var m=s.marker;
+  if(m>=0xE0&&m<=0xEF){
+    var sig=readAscii(b,s.payloadStart,Math.min(40,s.payloadEnd-s.payloadStart));
+    var n=m-0xE0;
+    if(m===0xE0){
+      if(sig.indexOf('JFIF')===0)return{kind:'density',label:'APP0 JFIF density',keep:opt.density};
+      if(sig.indexOf('JFXX')===0)return{kind:'thumb',label:'APP0 JFXX thumbnail',keep:false};
+      return{kind:'vendor',label:'APP0 '+(sig||'binary'),keep:!opt.unknown};
+    }
+    if(m===0xE1){
+      if(sig.indexOf('Exif')===0)return{kind:'exif',label:'APP1 Exif / TIFF',keep:false};
+      if(sig.indexOf('http://ns.adobe.com/xap/1.0/')===0)return{kind:'xmp',label:'APP1 XMP packet',keep:false};
+      if(sig.indexOf('http://ns.adobe.com/xmp/extension/')===0)return{kind:'xmp',label:'APP1 extended XMP',keep:false};
+      return{kind:'exif',label:'APP1 '+(sig.slice(0,18)||'binary'),keep:false};
+    }
+    if(m===0xE2){
+      if(sig.indexOf('ICC_PROFILE')===0)return{kind:'icc',label:'APP2 ICC colour profile',keep:opt.icc};
+      if(sig.indexOf('MPF')===0)return{kind:'mpf',label:'APP2 MPF embedded images',keep:false};
+      if(sig.indexOf('FPXR')===0)return{kind:'fpxr',label:'APP2 FlashPix store',keep:false};
+      return{kind:'vendor',label:'APP2 '+(sig.slice(0,18)||'binary'),keep:!opt.unknown};
+    }
+    if(m===0xEB&&sig.indexOf('JP')===0)return{kind:'c2pa',label:'APP11 JUMBF / C2PA provenance',keep:false};
+    if(m===0xEC)return{kind:'ducky',label:'APP12 Ducky picture info',keep:false};
+    if(m===0xED&&sig.indexOf('Photoshop')===0)return{kind:'iptc',label:'APP13 Photoshop IRB / IPTC',keep:false};
+    if(m===0xEE&&sig.indexOf('Adobe')===0)return{kind:'adobe',label:'APP14 Adobe colour transform',keep:true,pinned:true};
+    return{kind:'vendor',label:'APP'+n+' '+(sig.slice(0,18)||'binary'),keep:!opt.unknown};
+  }
+  if(m===0xFE)return{kind:'comment',label:'COM comment',keep:false};
+  return{kind:'struct',label:markerName(m),keep:true,pinned:true};
+}
+function stripJpeg(b,opt){
+  var segs=scanJpeg(b),i;
+  var exif=null,exifErr=null,orientation=1;
+  for(i=0;i<segs.length;i++){
+    var s=segs[i];
+    if(s.marker===0xE1&&!s.standalone&&readAscii(b,s.payloadStart,6).indexOf('Exif')===0){
+      try{exif=parseTiff(b,s.payloadStart+6,s.payloadEnd-s.payloadStart-6);orientation=exif.orientation;}
+      catch(e){exifErr=e.message;}
+      break;
+    }
+  }
+  var kept=[],removed=[],parts=[{kind:'soi',bytes:b.subarray(0,2)}],structure=[];
+  structure.push({label:'SOI start of image',bytes:2,keep:true});
+  var tailStart=-1;
+  for(i=0;i<segs.length;i++){
+    var seg=segs[i];
+    var size=seg.end-seg.start;
+    if(seg.standalone){
+      structure.push({label:markerName(seg.marker),bytes:size,keep:true});
+      parts.push({kind:'struct',bytes:b.subarray(seg.start,seg.end)});
+      continue;
+    }
+    var c=classifyJpeg(b,seg,opt);
+    structure.push({label:c.label,bytes:size,keep:c.keep});
+    if(c.keep){kept.push({label:c.label,kind:c.kind,bytes:size});parts.push({kind:c.kind,bytes:b.subarray(seg.start,seg.end)});}
+    else removed.push({label:c.label,kind:c.kind,bytes:size});
+    if(seg.sos){tailStart=seg.payloadEnd;break;}
+  }
+  var tailLen=0;
+  if(tailStart>=0){tailLen=b.length-tailStart;structure.push({label:'entropy-coded scan + trailer',bytes:tailLen,keep:true});}
+
+  var injected=null;
+  if(opt.orient&&orientation>1&&orientation<=8){
+    var tiff=orientationTiff(orientation);
+    var payload=cat([ascii('Exif',false),new Uint8Array([0,0]),tiff]);
+    var hdr=new Uint8Array(4);
+    hdr[0]=0xFF;hdr[1]=0xE1;hdr[2]=((payload.length+2)>>8)&255;hdr[3]=(payload.length+2)&255;
+    injected=cat([hdr,payload]);
+    var at=1;
+    for(i=1;i<parts.length;i++){if(parts[i].kind==='density')at=i+1;}
+    parts.splice(at,0,{kind:'orient',bytes:injected});
+    kept.push({label:'APP1 Exif (orientation only, rebuilt)',kind:'orient',bytes:injected.length});
+  }
+
+  var out=cat(parts.map(function(p){return p.bytes;}).concat(tailStart>=0?[b.subarray(tailStart)]:[]));
+  return {format:'jpeg',out:out,kept:kept,removed:removed,structure:structure,
+          exif:exif,exifError:exifErr,orientation:orientation,
+          pixelBytes:tailLen,injected:injected?injected.length:0};
+}
+
+/* ============================ PNG ============================ */
+var PNG_SIG=[137,80,78,71,13,10,26,10];
+var PNG_LABEL={IHDR:'IHDR header',PLTE:'PLTE palette',IDAT:'IDAT image data',IEND:'IEND trailer',
+  tRNS:'tRNS transparency',gAMA:'gAMA gamma',cHRM:'cHRM chromaticity',sRGB:'sRGB rendering intent',
+  sBIT:'sBIT significant bits',bKGD:'bKGD background',hIST:'hIST palette histogram',
+  sPLT:'sPLT suggested palette',cICP:'cICP coding-independent points',mDCv:'mDCv mastering volume',
+  cLLi:'cLLi content light level',acTL:'acTL apng control',fcTL:'fcTL apng frame control',
+  fdAT:'fdAT apng frame data',sTER:'sTER stereo layout',
+  pHYs:'pHYs pixel density',oFFs:'oFFs image offset',sCAL:'sCAL physical scale',
+  iCCP:'iCCP ICC colour profile',eXIf:'eXIf Exif / TIFF',tEXt:'tEXt text',
+  zTXt:'zTXt compressed text',iTXt:'iTXt international text',tIME:'tIME last modified'};
+var PNG_ALWAYS={IHDR:1,PLTE:1,IDAT:1,IEND:1,tRNS:1,gAMA:1,cHRM:1,sRGB:1,sBIT:1,bKGD:1,
+  hIST:1,sPLT:1,cICP:1,mDCv:1,cLLi:1,acTL:1,fcTL:1,fdAT:1,sTER:1};
+var PNG_DENSITY={pHYs:1,oFFs:1,sCAL:1};
+var PNG_META={eXIf:1,tEXt:1,zTXt:1,iTXt:1,tIME:1};
+
+function scanPng(b){
+  var i;
+  if(b.length<8)throw new Error('not a PNG: file too short');
+  for(i=0;i<8;i++)if(b[i]!==PNG_SIG[i])throw new Error('not a PNG: bad signature');
+  var chunks=[];i=8;
+  while(i+8<=b.length){
+    var len=be32(b,i);
+    var type=String.fromCharCode(b[i+4],b[i+5],b[i+6],b[i+7]);
+    var end=i+12+len;
+    if(len>b.length||end>b.length)throw new Error('truncated PNG chunk: '+type);
+    chunks.push({type:type,start:i,end:end,dataStart:i+8,dataEnd:i+8+len,len:len});
+    i=end;
+    if(type==='IEND')break;
+  }
+  if(!chunks.length||chunks[0].type!=='IHDR')throw new Error('PNG does not start with IHDR');
+  return chunks;
+}
+function pngTextInfo(b,c){
+  var kw=readAscii(b,c.dataStart,Math.min(80,c.len));
+  if(c.type==='tEXt'){
+    var v=readAscii(b,c.dataStart+kw.length+1,Math.min(160,c.len-kw.length-1));
+    return kw+' = '+v;
+  }
+  if(c.type==='iTXt'){
+    var p=c.dataStart+kw.length+1;
+    var comp=b[p];
+    if(comp)return kw+' = (compressed)';
+    var q=p+2;
+    var lang=readAscii(b,q,40);q+=lang.length+1;
+    var tr=readAscii(b,q,80);q+=tr.length+1;
+    return kw+' = '+readAscii(b,q,Math.min(160,c.dataEnd-q));
+  }
+  return kw+' = (deflate compressed)';
+}
+function stripPng(b,opt){
+  var chunks=scanPng(b),i;
+  var kept=[],removed=[],structure=[],parts=[b.subarray(0,8)];
+  var exif=null,exifErr=null,orientation=1,textLines=[],idatBytes=0;
+  structure.push({label:'PNG signature',bytes:8,keep:true});
+
+  for(i=0;i<chunks.length;i++){
+    if(chunks[i].type==='eXIf'){
+      try{exif=parseTiff(b,chunks[i].dataStart,chunks[i].len);orientation=exif.orientation;}
+      catch(e){exifErr=e.message;}
+    }
+  }
+
+  var ihdrIndex=-1;
+  for(i=0;i<chunks.length;i++){
+    var c=chunks[i],size=c.end-c.start,keep,kind;
+    if(PNG_ALWAYS[c.type]){keep=true;kind=c.type==='IDAT'||c.type==='fdAT'?'pixels':'render';}
+    else if(PNG_DENSITY[c.type]){keep=opt.density;kind='density';}
+    else if(c.type==='iCCP'){keep=opt.icc;kind='icc';}
+    else if(PNG_META[c.type]){keep=false;kind=c.type==='eXIf'?'exif':(c.type==='tIME'?'time':'text');}
+    else{keep=!opt.unknown;kind='vendor';}
+    var label=PNG_LABEL[c.type]||('private chunk '+c.type);
+    if(kind==='text'){try{textLines.push(pngTextInfo(b,c));}catch(e){}}
+    if(c.type==='IDAT'||c.type==='fdAT')idatBytes+=c.len;
+    structure.push({label:label,bytes:size,keep:keep});
+    if(keep){
+      kept.push({label:label,kind:kind,bytes:size});
+      parts.push(b.subarray(c.start,c.end));
+      if(c.type==='IHDR')ihdrIndex=parts.length;
+    } else removed.push({label:label,kind:kind,bytes:size});
+  }
+
+  var injected=0;
+  if(opt.orient&&orientation>1&&orientation<=8){
+    var tiff=orientationTiff(orientation);
+    var chunk=new Uint8Array(12+tiff.length),dv=new DataView(chunk.buffer);
+    dv.setUint32(0,tiff.length,false);
+    chunk[4]=0x65;chunk[5]=0x58;chunk[6]=0x49;chunk[7]=0x66; /* eXIf */
+    chunk.set(tiff,8);
+    dv.setUint32(8+tiff.length,crc32(chunk.subarray(4,8+tiff.length)),false);
+    parts.splice(ihdrIndex>0?ihdrIndex:1,0,chunk);
+    kept.push({label:'eXIf (orientation only, rebuilt)',kind:'orient',bytes:chunk.length});
+    injected=chunk.length;
+  }
+
+  return {format:'png',out:cat(parts),kept:kept,removed:removed,structure:structure,
+          exif:exif,exifError:exifErr,orientation:orientation,text:textLines,
+          pixelBytes:idatBytes,injected:injected};
+}
+
+/* ============================ dispatch + findings ============================ */
+function sniff(b){
+  if(b.length>3&&b[0]===0xFF&&b[1]===0xD8)return 'jpeg';
+  if(b.length>8&&b[0]===137&&b[1]===80&&b[2]===78&&b[3]===71)return 'png';
+  if(b.length>12&&readAscii(b,0,4)==='RIFF'&&readAscii(b,8,4)==='WEBP')return 'webp';
+  if(b.length>12&&readAscii(b,4,4)==='ftyp')return 'heif';
+  if(b.length>3&&readAscii(b,0,3)==='GIF')return 'gif';
+  if(b.length>2&&(be16(b,0)===0x4949||be16(b,0)===0x4D4D))return 'tiff';
+  return 'unknown';
+}
+function coordStr(c){
+  if(!c)return '';
+  var s=c.lat.toFixed(6)+', '+c.lon.toFixed(6);
+  if(typeof c.alt==='number')s+='  alt '+c.alt.toFixed(1)+' m';
+  return s;
+}
+function findings(r){
+  var f=[],e=r.exif,i;
+  if(e&&e.coords){
+    f.push({lvl:'fail',ttl:'GPS position embedded',
+      sub:coordStr(e.coords)+(e.gps.GPSDateStamp?'  '+e.gps.GPSDateStamp:'')+'  \u2014 removed'});
+  }
+  var idbits=[];
+  if(e){
+    ['BodySerialNumber','LensSerialNumber','CameraOwnerName','Artist','ImageUniqueID'].forEach(function(k){
+      if(e.tags[k])idbits.push(k+'='+e.tags[k]);
+    });
+  }
+  if(idbits.length)f.push({lvl:'fail',ttl:'Identifying tags embedded',sub:idbits.join('  \u00b7  ')+'  \u2014 removed'});
+  if(e&&(e.tags.DateTimeOriginal||e.tags.DateTime))
+    f.push({lvl:'warn',ttl:'Capture timestamp embedded',
+      sub:(e.tags.DateTimeOriginal||e.tags.DateTime)+'  \u2014 removed'});
+  if(e&&e.hasThumb)
+    f.push({lvl:'warn',ttl:'Embedded thumbnail in IFD1',
+      sub:fmtBytes(e.thumbBytes)+' \u2014 thumbnails survive crops and redactions in some editors. Removed.'});
+  if(r.orientation>1){
+    f.push({lvl:r.injected?'info':'warn',
+      ttl:r.injected?'Orientation '+r.orientation+' preserved':'Orientation '+r.orientation+' discarded',
+      sub:r.injected?('rebuilt as a '+r.injected+'-byte block carrying tag 0x0112 only \u2014 no other Exif survives')
+        :'the image will display rotated in viewers that honour the flag; re-enable the retention rule to keep it'});
+  }
+  if(r.text&&r.text.length)
+    f.push({lvl:'warn',ttl:'PNG text chunks',sub:r.text.slice(0,4).join('  \u00b7  ')+'  \u2014 removed'});
+  var iccKept=r.kept.some(function(k){return k.kind==='icc';});
+  var iccDropped=r.removed.some(function(k){return k.kind==='icc';});
+  if(iccKept)f.push({lvl:'info',ttl:'ICC profile retained',sub:'colour rendering unchanged; the profile carries no personal data'});
+  if(iccDropped)f.push({lvl:'warn',ttl:'ICC profile removed',sub:'wide-gamut and CMYK sources will shift in colour-managed viewers'});
+  var adobe=r.kept.some(function(k){return k.kind==='adobe';});
+  if(adobe)f.push({lvl:'info',ttl:'APP14 Adobe retained',sub:'colour-transform declaration \u2014 stripping it inverts CMYK/YCCK JPEGs'});
+  var vendor=r.removed.filter(function(k){return k.kind==='vendor'||k.kind==='c2pa'||k.kind==='mpf'||k.kind==='fpxr';});
+  if(vendor.length)f.push({lvl:'info',ttl:vendor.length+' vendor / provenance block'+(vendor.length>1?'s':'')+' removed',
+    sub:vendor.map(function(v){return v.label;}).join('  \u00b7  ')});
+  if(r.exifError)f.push({lvl:'warn',ttl:'Exif block did not parse',
+    sub:r.exifError+' \u2014 the block was removed regardless; stripping does not depend on parsing'});
+  if(!r.removed.length)f.push({lvl:'pass',ttl:'No metadata found',sub:'file already carries nothing beyond structure and pixels'});
+  return f;
+}
+function processBytes(name,bytes,opt){
+  var kind=sniff(bytes);
+  var item={name:name,inSize:bytes.length,input:bytes,ok:false};
+  if(kind!=='jpeg'&&kind!=='png'){
+    item.error=kind==='unknown'
+      ? 'unrecognised container \u2014 JPEG and PNG only'
+      : kind.toUpperCase()+' is not supported \u2014 JPEG and PNG only';
+    item.format=kind;
+    return item;
+  }
+  try{
+    var r=kind==='jpeg'?stripJpeg(bytes,opt):stripPng(bytes,opt);
+    item.ok=true;item.format=r.format;item.result=r;item.outSize=r.out.length;
+    item.saved=bytes.length-r.out.length;
+    item.findings=findings(r);
+    var dot=name.lastIndexOf('.');
+    var base=dot>0?name.slice(0,dot):name;
+    item.outName=base+'-clean.'+(r.format==='jpeg'?(dot>0?name.slice(dot+1).toLowerCase():'jpg'):'png');
+  }catch(e){item.error=e.message;item.format=kind;}
+  return item;
+}
+
+/* ============================ sample builders ============================ */
+function ifdWriter(entries,startOff){
+  var n=entries.length,ifdLen=2+n*12+4;
+  var ifd=new Uint8Array(ifdLen),dv=new DataView(ifd.buffer);
+  var dataOff=startOff+ifdLen,blobs=[];
+  dv.setUint16(0,n,true);
+  entries.forEach(function(e,i){
+    var o=2+i*12;
+    dv.setUint16(o,e.tag,true);dv.setUint16(o+2,e.type,true);dv.setUint32(o+4,e.count,true);
+    if(e.val.length<=4)ifd.set(e.val,o+8);
+    else{
+      dv.setUint32(o+8,dataOff,true);blobs.push(e.val);dataOff+=e.val.length;
+      if(e.val.length&1){blobs.push(new Uint8Array(1));dataOff+=1;}
+    }
+  });
+  return {ifd:ifd,dv:dv,blobs:blobs,end:dataOff,
+    patch:function(tag,v){entries.forEach(function(e,i){if(e.tag===tag)dv.setUint32(2+i*12+8,v>>>0,true);});}};
+}
+function A(tag,s){var v=ascii(s);return{tag:tag,type:2,count:v.length,val:v};}
+function S(tag,n){var v=new Uint8Array(4);v[0]=n&255;v[1]=(n>>8)&255;return{tag:tag,type:3,count:1,val:v};}
+function L(tag,n){var v=new Uint8Array(4);new DataView(v.buffer).setUint32(0,n>>>0,true);return{tag:tag,type:4,count:1,val:v};}
+function R(tag,pairs){
+  var v=new Uint8Array(pairs.length*8),dv=new DataView(v.buffer);
+  pairs.forEach(function(p,i){dv.setUint32(i*8,p[0],true);dv.setUint32(i*8+4,p[1],true);});
+  return{tag:tag,type:5,count:pairs.length,val:v};
+}
+function B(tag,arr){return{tag:tag,type:1,count:arr.length,val:new Uint8Array(arr)};}
+function U(tag,s){
+  var head=[0x41,0x53,0x43,0x49,0x49,0,0,0],i;
+  for(i=0;i<s.length;i++)head.push(s.charCodeAt(i)&255);
+  return{tag:tag,type:7,count:head.length,val:new Uint8Array(head)};
+}
+function sampleTiff(){
+  var ifd0=[
+    A(0x010E,'Rooftop plant room, north wing'),
+    A(0x010F,'Midnight Fox Optics'),
+    A(0x0110,'MF-1 Field Body'),
+    S(0x0112,6),
+    A(0x0131,'MF Capture 3.2.1'),
+    A(0x0132,'2019:07:14 18:23:41'),
+    A(0x013B,'N. Kestrel'),
+    A(0x8298,'(c) 2019 Midnight Fox'),
+    L(0x8769,0),
+    L(0x8825,0)
+  ];
+  var exif=[
+    R(0x829A,[[1,250]]),
+    R(0x829D,[[28,10]]),
+    S(0x8827,400),
+    A(0x9003,'2019:07:14 18:23:41'),
+    U(0x9286,'asset tag PLR-04, contractor site visit'),
+    A(0xA420,'9F2C41B0E7D84A15'),
+    A(0xA430,'Midnight Fox Consulting'),
+    A(0xA431,'MF1-0042-7731'),
+    A(0xA434,'MF 24mm f/2.8 Field')
+  ];
+  var gps=[
+    B(0x0000,[2,3,0,0]),
+    A(0x0001,'N'),
+    R(0x0002,[[50,1],[53,1],[4560,100]]),
+    A(0x0003,'E'),
+    R(0x0004,[[4,1],[29,1],[1320,100]]),
+    B(0x0005,[0]),
+    R(0x0006,[[5400,100]]),
+    R(0x0007,[[16,1],[23,1],[41,1]]),
+    A(0x001D,'2019:07:14')
+  ];
+  var w0=ifdWriter(ifd0,8);
+  var w1=ifdWriter(exif,w0.end);
+  var w2=ifdWriter(gps,w1.end);
+  w0.patch(0x8769,w0.end);
+  w0.patch(0x8825,w1.end);
+  var head=new Uint8Array(8),hv=new DataView(head.buffer);
+  head[0]=0x49;head[1]=0x49;hv.setUint16(2,42,true);hv.setUint32(4,8,true);
+  return cat([head,w0.ifd].concat(w0.blobs,[w1.ifd],w1.blobs,[w2.ifd],w2.blobs));
+}
+var XMP_PACKET='<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>'+
+'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'+
+'<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/">'+
+'<dc:creator><rdf:Seq><rdf:li>N. Kestrel</rdf:li></rdf:Seq></dc:creator>'+
+'<photoshop:City>Zaventem</photoshop:City><photoshop:Credit>Midnight Fox Consulting</photoshop:Credit>'+
+'</rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>';
+function jpegSeg(marker,payload){
+  var h=new Uint8Array(4);
+  h[0]=0xFF;h[1]=marker;h[2]=((payload.length+2)>>8)&255;h[3]=(payload.length+2)&255;
+  return cat([h,payload]);
+}
+function iptcBlock(){
+  var ds=[];
+  function add(rec,set,txt){
+    ds.push(0x1C,rec,set,(txt.length>>8)&255,txt.length&255);
+    for(var i=0;i<txt.length;i++)ds.push(txt.charCodeAt(i)&255);
+  }
+  add(2,80,'N. Kestrel');
+  add(2,90,'Zaventem');
+  add(2,120,'Rooftop plant room, north wing');
+  var body=new Uint8Array(ds);
+  var head=[0x38,0x42,0x49,0x4D,0x04,0x04,0x00,0x00,
+            (body.length>>>24)&255,(body.length>>>16)&255,(body.length>>>8)&255,body.length&255];
+  var out=cat([new Uint8Array(head),body]);
+  if(out.length&1)out=cat([out,new Uint8Array(1)]);
+  return cat([ascii('Photoshop 3.0'),out]);
+}
+function drawSample(w,h){
+  var cv=document.createElement('canvas');
+  cv.width=w;cv.height=h;
+  var g=cv.getContext&&cv.getContext('2d');
+  if(!g)return null;
+  g.fillStyle='#020e26';g.fillRect(0,0,w,h);
+  g.fillStyle='#0d1f3f';g.fillRect(30,40,w-60,h-120);
+  g.fillStyle='#18294a';
+  for(var i=0;i<9;i++)g.fillRect(46,58+i*26,(w-92)*(0.28+((i*37)%53)/100),12);
+  g.fillStyle='#4fc2ad';g.fillRect(46,h-64,90,14);
+  g.fillStyle='#ec7280';g.fillRect(148,h-64,54,14);
+  g.strokeStyle='#ffffff';g.lineWidth=2;g.strokeRect(30,40,w-60,h-120);
+  g.fillStyle='#dce5f7';
+  g.font='16px ui-monospace, Menlo, Consolas, monospace';
+  g.fillText('MF SAMPLE FRAME',46,32);
+  g.fillText('2019-07-14 18:23:41',w-230,h-24);
+  return cv;
+}
+function sampleJpeg(){
+  var cv=drawSample(560,360);
+  if(!cv||!cv.toDataURL)return null;
+  var url=cv.toDataURL('image/jpeg',0.86);
+  if(url.indexOf('data:image/jpeg')!==0)return null;
+  var raw=b64ToBytes(url.split(',')[1]);
+  var meta=cat([
+    jpegSeg(0xE0,cat([ascii('JFIF'),new Uint8Array([1,2,1,0,72,0,72,0,0])])),
+    jpegSeg(0xE1,cat([ascii('Exif'),new Uint8Array([0]),sampleTiff()])),
+    jpegSeg(0xE1,cat([ascii('http://ns.adobe.com/xap/1.0/'),ascii(XMP_PACKET,false)])),
+    jpegSeg(0xED,iptcBlock()),
+    jpegSeg(0xEE,cat([ascii('Adobe',false),new Uint8Array([0,100,0,0,0,0,0])])),
+    jpegSeg(0xFE,ascii('field capture \u2014 do not distribute',false))
+  ]);
+  return cat([raw.subarray(0,2),meta,raw.subarray(2)]);
+}
+function pngChunk(type,data){
+  var c=new Uint8Array(12+data.length),dv=new DataView(c.buffer);
+  dv.setUint32(0,data.length,false);
+  for(var i=0;i<4;i++)c[4+i]=type.charCodeAt(i);
+  c.set(data,8);
+  dv.setUint32(8+data.length,crc32(c.subarray(4,8+data.length)),false);
+  return c;
+}
+function samplePng(){
+  var cv=drawSample(560,360);
+  if(!cv||!cv.toDataURL)return null;
+  var url=cv.toDataURL('image/png');
+  if(url.indexOf('data:image/png')!==0)return null;
+  var raw=b64ToBytes(url.split(',')[1]);
+  var chunks=scanPng(raw);
+  var ihdrEnd=chunks[0].end;
+  var tIME=new Uint8Array(7),tv=new DataView(tIME.buffer);
+  tv.setUint16(0,2019,false);tIME[2]=7;tIME[3]=14;tIME[4]=18;tIME[5]=23;tIME[6]=41;
+  var itxt=cat([ascii('XML:com.adobe.xmp'),new Uint8Array([0,0]),new Uint8Array([0]),new Uint8Array([0]),ascii(XMP_PACKET,false)]);
+  var meta=cat([
+    pngChunk('eXIf',sampleTiff()),
+    pngChunk('tEXt',cat([ascii('Software'),ascii('MF Capture 3.2.1',false)])),
+    pngChunk('tEXt',cat([ascii('Comment'),ascii('asset tag PLR-04, contractor site visit',false)])),
+    pngChunk('tEXt',cat([ascii('Author'),ascii('N. Kestrel',false)])),
+    pngChunk('iTXt',itxt),
+    pngChunk('tIME',tIME),
+    pngChunk('mkBF',ascii('vendor private block',false))
+  ]);
+  return cat([raw.subarray(0,ihdrEnd),meta,raw.subarray(ihdrEnd)]);
+}
+
+/* ============================ UI ============================ */
+var state={items:[],sel:-1};
+var opt={icc:true,orient:true,density:true,unknown:true};
+var $=function(id){return document.getElementById(id);};
+var urls=[];
+
+function esc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function download(name,bytes,mime){
+  var blob=new Blob([bytes],{type:mime||'application/octet-stream'});
+  var u=URL.createObjectURL(blob);
+  urls.push(u);
+  var a=document.createElement('a');
+  a.href=u;a.download=name;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(u);},4000);
+}
+
+function ingestBytes(name,bytes){
+  state.items.push(processBytes(name,bytes,opt));
+  if(state.sel<0)state.sel=state.items.length-1;
+  render();
+}
+function ingestFile(f){
+  var fr=new FileReader();
+  fr.onload=function(){ingestBytes(f.name,new Uint8Array(fr.result));};
+  fr.onerror=function(){ingestBytes(f.name,new Uint8Array(0));};
+  fr.readAsArrayBuffer(f);
+}
+function reprocess(){
+  state.items=state.items.map(function(it){return processBytes(it.name,it.input,opt);});
+  render();
+}
+
+function renderQueue(){
+  var wrap=$('queueWrap');
+  if(!state.items.length){wrap.innerHTML='<div class="empty">no files loaded</div>';return;}
+  var h='<table class="tbl"><thead><tr>'+
+    '<th scope="col">File</th><th scope="col" class="hide-s">Format</th>'+
+    '<th scope="col" class="num">In</th><th scope="col" class="num">Stripped</th>'+
+    '<th scope="col" class="act">&nbsp;</th></tr></thead><tbody>';
+  state.items.forEach(function(it,i){
+    var strip=it.ok
+      ? '<span class="'+(it.saved>0?'ok':'dim')+'">-'+fmtBytes(it.saved)+'</span>'
+      : '<span class="bad">error</span>';
+    h+='<tr class="'+(i===state.sel?'sel':'')+'">'+
+      '<td><button type="button" class="lnk" data-sel="'+i+'">'+esc(it.name)+'</button></td>'+
+      '<td class="hide-s mono dim">'+esc((it.format||'?').toUpperCase())+'</td>'+
+      '<td class="num dim">'+fmtBytes(it.inSize)+'</td>'+
+      '<td class="num">'+strip+'</td>'+
+      '<td class="act">'+(it.ok?'<button type="button" class="btn sm" data-dl="'+i+'">Save</button>':'')+'</td>'+
+      '</tr>';
+  });
+  h+='</tbody></table>';
+  wrap.innerHTML=h;
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-sel]'),function(b){
+    b.addEventListener('click',function(){state.sel=+b.getAttribute('data-sel');render();});
+  });
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-dl]'),function(b){
+    b.addEventListener('click',function(){
+      var it=state.items[+b.getAttribute('data-dl')];
+      download(it.outName,it.result.out,it.format==='jpeg'?'image/jpeg':'image/png');
+    });
+  });
+}
+function renderFindings(it){
+  var p=$('pane-find');
+  if(!it){p.innerHTML='<div class="empty">select a file in the queue</div>';return;}
+  if(!it.ok){p.innerHTML='<div class="issue fail"><div class="ttl">Cannot process</div><div class="sub">'+esc(it.error)+'</div></div>';return;}
+  var r=it.result,h='';
+  h+='<div class="issue pass"><div class="ttl">'+fmtBytes(it.saved)+' of metadata removed \u00b7 pixels untouched</div>'+
+     '<div class="sub">'+fmtBytes(it.inSize)+' \u2192 '+fmtBytes(it.outSize)+'  \u00b7  '+
+     fmtBytes(r.pixelBytes)+' of '+(r.format==='jpeg'?'entropy-coded scan':'IDAT stream')+
+     ' copied byte-for-byte  \u00b7  no re-encode</div></div>';
+  it.findings.forEach(function(f){
+    h+='<div class="issue '+f.lvl+'"><div class="ttl">'+esc(f.ttl)+'</div><div class="sub">'+esc(f.sub)+'</div></div>';
+  });
+  p.innerHTML=h;
+}
+function renderMeta(it){
+  var p=$('pane-meta');
+  if(!it||!it.ok){p.innerHTML='<div class="empty">select a file in the queue</div>';return;}
+  var e=it.result.exif;
+  if(!e){
+    var txt=it.result.text||[];
+    if(!txt.length){p.innerHTML='<div class="empty">no exif block in this file</div>';return;}
+    p.innerHTML='<dl class="kv">'+txt.map(function(t){
+      var ix=t.indexOf(' = ');
+      return '<dt>'+esc(t.slice(0,ix))+'</dt><dd>'+esc(t.slice(ix+3))+'</dd>';
+    }).join('')+'</dl>';
+    return;
+  }
+  var rows=[];
+  rows.push(['byte order',e.endian]);
+  rows.push(['tags read',e.tagCount+' across '+e.ifds+' IFD'+(e.ifds>1?'s':'')]);
+  Object.keys(e.tags).forEach(function(k){
+    var v=e.tags[k];
+    if(v&&v.length===2&&typeof v[0]==='number'&&typeof v[1]==='number'&&k!=='Orientation')
+      v=v[1]?(v[0]/v[1]).toString():v.join('/');
+    rows.push([k,String(v)]);
+  });
+  if(e.coords)rows.push(['GPS decimal',coordStr(e.coords)]);
+  Object.keys(e.gps).forEach(function(k){
+    if(k==='GPSLatitude'||k==='GPSLongitude'||k==='GPSTimeStamp'){
+      rows.push([k,e.gps[k].map(function(r){return r[0]+'/'+r[1];}).join('  ')]);
+    } else rows.push([k,String(e.gps[k])]);
+  });
+  if(e.hasThumb)rows.push(['IFD1 thumbnail',fmtBytes(e.thumbBytes)]);
+  (it.result.text||[]).forEach(function(t){var ix=t.indexOf(' = ');rows.push(['png '+t.slice(0,ix),t.slice(ix+3)]);});
+  p.innerHTML='<p class="note">Everything below is what the file was carrying. None of it is in the output.</p>'+
+    '<dl class="kv">'+rows.map(function(r){return '<dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd>';}).join('')+'</dl>';
+}
+function renderStruct(it){
+  var p=$('pane-struct');
+  p.classList.remove('nopad');
+  if(!it||!it.ok){p.innerHTML='<div class="empty">select a file in the queue</div>';return;}
+  var h='<table class="tbl"><thead><tr><th scope="col">Segment</th><th scope="col" class="num">Bytes</th>'+
+        '<th scope="col" class="num">Action</th></tr></thead><tbody>';
+  it.result.structure.forEach(function(s){
+    h+='<tr><td class="mono">'+esc(s.label)+'</td><td class="num dim">'+s.bytes+'</td>'+
+       '<td class="num '+(s.keep?'seg-keep':'seg-drop')+'">'+(s.keep?'keep':'drop')+'</td></tr>';
+  });
+  it.result.kept.filter(function(k){return k.kind==='orient';}).forEach(function(k){
+    h+='<tr><td class="mono">'+esc(k.label)+'</td><td class="num dim">'+k.bytes+'</td><td class="num seg-keep">add</td></tr>';
+  });
+  h+='</tbody></table>';
+  p.classList.add('nopad');
+  p.innerHTML=h;
+}
+function auditObject(){
+  return {
+    tool:'MF - EXIF Stripper',
+    generated:new Date().toISOString(),
+    processing:'client-side container rewrite, no network calls',
+    retentionRules:{keepIccProfile:opt.icc,preserveOrientationFlag:opt.orient,
+      keepDensity:opt.density,dropUnknownVendorBlocks:opt.unknown},
+    files:state.items.map(function(it){
+      if(!it.ok)return {name:it.name,status:'error',detail:it.error};
+      var e=it.result.exif;
+      return {
+        name:it.name,output:it.outName,format:it.format,
+        bytesIn:it.inSize,bytesOut:it.outSize,metadataRemovedBytes:it.saved,
+        pixelStreamBytesCopied:it.result.pixelBytes,
+        removed:it.result.removed.map(function(r){return {block:r.label,bytes:r.bytes};}),
+        retained:it.result.kept.map(function(r){return {block:r.label,bytes:r.bytes};}),
+        exifTagsFound:e?e.tagCount:0,
+        gps:e&&e.coords?{lat:+e.coords.lat.toFixed(6),lon:+e.coords.lon.toFixed(6)}:null,
+        orientation:it.result.orientation,
+        orientationPreserved:!!it.result.injected
+      };
+    })
+  };
+}
+function renderAudit(it){
+  var p=$('pane-audit');
+  if(!state.items.length){p.innerHTML='<div class="empty">select a file in the queue</div>';return;}
+  p.innerHTML='<div class="out" style="max-height:420px">'+esc(JSON.stringify(auditObject(),null,2))+'</div>';
+}
+function render(){
+  var it=state.sel>=0?state.items[state.sel]:null;
+  renderQueue();renderFindings(it);renderMeta(it);renderStruct(it);renderAudit(it);
+  var okCount=state.items.filter(function(x){return x.ok;}).length;
+  var saved=state.items.reduce(function(a,x){return a+(x.ok?x.saved:0);},0);
+  $('qStatus').textContent=state.items.length?
+    (okCount+' ok / '+state.items.length+' \u00b7 -'+fmtBytes(saved)):'0 files';
+  $('qStatus').className='status'+(state.items.length&&okCount<state.items.length?' err':(okCount?' ok':''));
+  $('rStatus').textContent=it?(it.ok?it.format.toUpperCase()+' \u00b7 cleaned':'error'):'no selection';
+  $('rStatus').className='status'+(it?(it.ok?' ok':' err'):'');
+  $('inStatus').textContent=state.items.length?'in memory only':'idle';
+  $('dlAll').disabled=okCount===0;
+  $('dlOne').disabled=!(it&&it.ok);
+  $('dlAudit').disabled=state.items.length===0;
+}
+
+function wire(){
+  var drop=$('drop'),file=$('file');
+  drop.addEventListener('click',function(){file.click();});
+  ['dragenter','dragover'].forEach(function(ev){
+    drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.add('over');});
+  });
+  ['dragleave','drop'].forEach(function(ev){
+    drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.remove('over');});
+  });
+  drop.addEventListener('drop',function(e){
+    var fs=e.dataTransfer&&e.dataTransfer.files;
+    if(fs)Array.prototype.forEach.call(fs,ingestFile);
+  });
+  document.addEventListener('dragover',function(e){e.preventDefault();});
+  document.addEventListener('drop',function(e){e.preventDefault();});
+  file.addEventListener('change',function(){
+    Array.prototype.forEach.call(file.files,ingestFile);
+    file.value='';
+  });
+
+  [['optIcc','icc'],['optOrient','orient'],['optDensity','density'],['optUnknown','unknown']].forEach(function(pair){
+    $(pair[0]).addEventListener('change',function(){opt[pair[1]]=$(pair[0]).checked;reprocess();});
+  });
+
+  $('clearAll').addEventListener('click',function(){state.items=[];state.sel=-1;render();});
+  $('sampleJpg').addEventListener('click',function(){
+    var b=sampleJpeg();if(b)ingestBytes('sample-geotagged.jpg',b);
+  });
+  $('samplePng').addEventListener('click',function(){
+    var b=samplePng();if(b)ingestBytes('sample-geotagged.png',b);
+  });
+  $('dlOne').addEventListener('click',function(){
+    var it=state.items[state.sel];
+    if(it&&it.ok)download(it.outName,it.result.out,it.format==='jpeg'?'image/jpeg':'image/png');
+  });
+  $('dlAll').addEventListener('click',function(){
+    var entries=state.items.filter(function(x){return x.ok;}).map(function(x){return {name:x.outName,data:x.result.out};});
+    if(entries.length)download('mf-exif-stripped.zip',zipStore(entries),'application/zip');
+  });
+  $('dlAudit').addEventListener('click',function(){
+    var json=JSON.stringify(auditObject(),null,2);
+    download('mf-exif-audit.json',utf8(json),'application/json');
+  });
+
+  var tabs=Array.prototype.slice.call(document.querySelectorAll('[role=tab]'));
+  function select(t){
+    tabs.forEach(function(x){
+      var on=x===t;
+      x.setAttribute('aria-selected',on?'true':'false');
+      x.tabIndex=on?0:-1;
+      $(x.getAttribute('aria-controls')).hidden=!on;
+    });
+  }
+  tabs.forEach(function(t,i){
+    t.addEventListener('click',function(){select(t);});
+    t.addEventListener('keydown',function(e){
+      var d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;
+      if(!d)return;
+      e.preventDefault();
+      var n=tabs[(i+d+tabs.length)%tabs.length];
+      select(n);n.focus();
+    });
+  });
+}
+
+function boot(){
+  wire();
+  try{
+    var j=sampleJpeg();if(j)state.items.push(processBytes('sample-geotagged.jpg',j,opt));
+    var p=samplePng();if(p)state.items.push(processBytes('sample-geotagged.png',p,opt));
+    if(state.items.length)state.sel=0;
+  }catch(e){}
+  render();
+}
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);
+else boot();
+
+window.__mf={
+  scanJpeg:scanJpeg,stripJpeg:stripJpeg,scanPng:scanPng,stripPng:stripPng,
+  parseTiff:parseTiff,processBytes:processBytes,zipStore:zipStore,crc32:crc32,
+  sampleTiff:sampleTiff,orientationTiff:orientationTiff,sniff:sniff,
+  sampleJpeg:sampleJpeg,samplePng:samplePng,
+  ingestBytes:ingestBytes,auditObject:auditObject,state:state,opt:opt,
+  setOpt:function(k,v){opt[k]=v;reprocess();},reset:function(){state.items=[];state.sel=-1;render();}
+};
+
+})();
+</script>
+</body>
+</html>
